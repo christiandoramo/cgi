@@ -1,0 +1,15 @@
+# exemplo camera.txt
+# N = 0 1 -1
+# V = 0 -1 -1
+# d = 5
+# hx = 2
+# hy = 2
+# C = 0 -500 500
+
+# aproximar a câmera (menos distância)
+N = 0 1 -1
+V = 0 -1 -1
+d = 5
+hx = 2
+hy = 2
+C = 0 -100 100
