@@ -7,5 +7,5 @@ seguir os comandos mostrados na Interface para dar zoom/out, ver vértices e are
 Para rodar
 
 * instale as bibliotecas do pipfile
-* sguestão: use pipenv install (antes selecionar o interpretador python correto e iniciar o pipenv shell se quiser)
+* sugestão: use pipenv install (antes selecionar o interpretador python correto e iniciar o pipenv shell se quiser)
 * depois rode o arquivo main.py
