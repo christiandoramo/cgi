@@ -1,9 +1,10 @@
-# main.py
+# main.py (corrigido: global render_scale_index e sem import pygame dentro de main)
 import os
 import sys
 import time
 import glob
 import math
+import pygame
 
 import lighting
 import byu_loader
@@ -16,6 +17,9 @@ import display
 # resolução padrão
 WIDTH = 800
 HEIGHT = 600
+# render scale factors: 1 = full res, 2 = metade em cada eixo (1/4 pixels), 4 = 1/16 pixels
+RENDER_SCALES = [1, 2, 4]
+render_scale_index = 0  # índice atual na lista acima (module-level)
 
 # UI list settings
 OBJ_LIST_TOPLEFT = (8, 8)
@@ -84,16 +88,14 @@ def spherical_from_cartesian(v):
     return (r, az, el)
 
 
-def build_frame(verts, tris, cam, width, height, lighting):
+def build_frame(verts, tris, cam, width, height, lighting_params):
     basis = transform.compute_camera_basis(cam)
     view_coords = transform.world_to_view_vertices(verts, basis)
     proj_results = projection.world_view_to_screen_list(view_coords, cam, width, height)
-    # mudei aqui
-    tri_pixels_map, framebuffer = rasterizer.rasterize_mesh(tris, proj_results, width, height,
-                                                            vertices_world=verts, basis=basis, lighting=lighting)
+    tri_pixels_map, framebuffer = rasterizer.rasterize_mesh(
+        tris, proj_results, width, height,
+        vertices_world=verts, basis=basis, lighting=lighting_params)
     all_pixels = set(framebuffer.keys())
-    for pset in tri_pixels_map.values():
-        all_pixels.update(pset)
     print("\n== Debug pipeline (resumo) ==")
     print(f"Vértices: {len(verts)}  |  Triângulos: {len(tris)}")
     print(f"Pixels preenchidos (todos triângulos): {len(all_pixels)}")
@@ -103,8 +105,7 @@ def build_frame(verts, tris, cam, width, height, lighting):
     else:
         print("Nenhum pixel preenchido (fora do frustum?).")
     print("================================\n")
-    return all_pixels, proj_results, tri_pixels_map, framebuffer
-
+    return all_pixels, proj_results, tri_pixels_map, framebuffer, basis
 
 
 def make_outline_and_vertices(tris, proj_results, width, height):
@@ -132,7 +133,23 @@ def make_outline_and_vertices(tris, proj_results, width, height):
 
 
 def main():
-    # buscar objetos
+    # use the module-level render_scale_index (we will assign to it)
+    global render_scale_index
+
+    help_lines = [
+        "Comandos:",
+        "L - recarregar lighting.txt",
+        "R - recarregar camera.txt",
+        "O - toggle contorno",
+        "V - toggle vértices",
+        "Z/X - zoom in/out",
+        "1 - alternar qualidade/velocidade (scale)",
+        "P - salvar screenshot",
+        "Clique (esq) nome na lista - trocar objeto",
+        "Segure botão direito - orbitar câmera",
+        "ESC - sair"
+    ]
+
     objects = find_formas_objects("formas")
     if not objects:
         print("⚠️ Nenhum arquivo .byu encontrado na pasta 'formas/'.")
@@ -149,7 +166,7 @@ def main():
     camfile = "camera.txt"
     cam = camera.load_camera(camfile)
     camera.pretty_print_camera(cam)
-    
+
     # carregar iluminação
     lightfile = "lighting.txt"
     light = lighting.load_lighting(lightfile)
@@ -169,32 +186,35 @@ def main():
     show_outline = False
     show_vertices = False
 
-    # construir e desenhar frame
-    all_pixels, proj_results, tri_pixels_map, framebuffer = build_frame(verts, tris, cam, WIDTH, HEIGHT, light)
-    outline_pixels, vertex_pixels = make_outline_and_vertices(tris, proj_results, WIDTH, HEIGHT)
-    display.clear_screen(screen, (0, 0, 0))
-    display.draw_colored_pixels(screen, framebuffer)
+    # construir e desenhar frame (usar escala atual)
+    scale = RENDER_SCALES[render_scale_index]
+    small_w = max(1, WIDTH // scale)
+    small_h = max(1, HEIGHT // scale)
+
+    all_pixels, proj_results, tri_pixels_map, framebuffer, basis = build_frame(verts, tris, cam, small_w, small_h, light)
+    outline_pixels, vertex_pixels = make_outline_and_vertices(tris, proj_results, small_w, small_h)
+
+    # desenhar em surface offscreen de tamanho reduzido
+    off_surf = pygame.Surface((small_w, small_h))
+    display.clear_screen(off_surf, (0,0,0))
+    display.draw_colored_pixels(off_surf, framebuffer)
+    if show_outline:
+        display.draw_pixels(off_surf, outline_pixels, (255, 0, 0))
+    if show_vertices:
+        display.draw_pixels(off_surf, vertex_pixels, (0, 255, 0))
+
+    # scale para a tela principal (suaviza levemente)
+    scaled = pygame.transform.smoothscale(off_surf, (WIDTH, HEIGHT))
+    screen.blit(scaled, (0,0))
+
+    # desenhar UI por cima
     object_rects = display.render_object_list_with_highlight(
         screen, objects, top_left=OBJ_LIST_TOPLEFT, width=OBJ_LIST_WIDTH,
         font_size=OBJ_FONT_SIZE, selected_index=0
     )
-
-    help_lines = [
-        "Comandos:",
-        "L - recarregar lighting.txt",
-        "R - recarregar camera.txt",
-        "O - toggle contorno",
-        "V - toggle vértices",
-        "Z/X - zoom in/out",
-        "P - salvar screenshot",
-        "Clique (esq) nome na lista - trocar objeto",
-        "Segure botão direito - orbitar câmera",
-        "ESC - sair"
-    ]
     display.render_help(screen, help_lines)
     display.present()
 
-    import pygame
     clock = pygame.time.Clock()
     running = True
     rotating = False
@@ -202,7 +222,6 @@ def main():
 
     print("✅ Sistema iniciado. Use o mouse e teclas conforme instruções na tela.")
 
-    # Meu loop principal
     while running:
         for ev in pygame.event.get():
             if ev.type == pygame.QUIT:
@@ -219,10 +238,26 @@ def main():
                             centroid = compute_centroid(verts)
                             v_cent_cam = vec_sub(tuple(cam['C']), centroid)
                             r, az, el = spherical_from_cartesian(v_cent_cam)
-                            all_pixels, proj_results, tri_pixels_map, framebuffer  = build_frame(verts, tris, cam, WIDTH, HEIGHT,light)
-                            outline_pixels, vertex_pixels = make_outline_and_vertices(tris, proj_results, WIDTH, HEIGHT)
-                            display.clear_screen(screen, (0, 0, 0))
-                            display.draw_colored_pixels(screen, framebuffer)
+
+                            # rebuild using current scale
+                            scale = RENDER_SCALES[render_scale_index]
+                            small_w = max(1, WIDTH // scale)
+                            small_h = max(1, HEIGHT // scale)
+
+                            all_pixels, proj_results, tri_pixels_map, framebuffer, basis = build_frame(
+                                verts, tris, cam, small_w, small_h, light)
+                            outline_pixels, vertex_pixels = make_outline_and_vertices(tris, proj_results, small_w, small_h)
+
+                            off_surf = pygame.Surface((small_w, small_h))
+                            display.clear_screen(off_surf, (0, 0, 0))
+                            display.draw_colored_pixels(off_surf, framebuffer)
+                            if show_outline:
+                                display.draw_pixels(off_surf, outline_pixels, (255, 0, 0))
+                            if show_vertices:
+                                display.draw_pixels(off_surf, vertex_pixels, (0, 255, 0))
+                            scaled = pygame.transform.smoothscale(off_surf, (WIDTH, HEIGHT))
+                            screen.blit(scaled, (0, 0))
+
                             object_rects = display.render_object_list_with_highlight(
                                 screen, objects, top_left=OBJ_LIST_TOPLEFT, width=OBJ_LIST_WIDTH,
                                 font_size=OBJ_FONT_SIZE, selected_index=(objects.index(current_obj_name))
@@ -252,10 +287,25 @@ def main():
                 cam['N'] = vec_sub(centroid, Cnew)
                 if 'V' not in cam:
                     cam['V'] = (0, 1, 0)
-                all_pixels, proj_results, tri_pixels_map,framebuffer = build_frame(verts, tris, cam, WIDTH, HEIGHT, light)
-                outline_pixels, vertex_pixels = make_outline_and_vertices(tris, proj_results, WIDTH, HEIGHT)
-                display.clear_screen(screen, (0, 0, 0))
-                display.draw_colored_pixels(screen, framebuffer)
+
+                # rebuild (with current scale)
+                scale = RENDER_SCALES[render_scale_index]
+                small_w = max(1, WIDTH // scale)
+                small_h = max(1, HEIGHT // scale)
+
+                all_pixels, proj_results, tri_pixels_map, framebuffer, basis = build_frame(verts, tris, cam, small_w, small_h, light)
+                outline_pixels, vertex_pixels = make_outline_and_vertices(tris, proj_results, small_w, small_h)
+
+                off_surf = pygame.Surface((small_w, small_h))
+                display.clear_screen(off_surf, (0, 0, 0))
+                display.draw_colored_pixels(off_surf, framebuffer)
+                if show_outline:
+                    display.draw_pixels(off_surf, outline_pixels, (255, 0, 0))
+                if show_vertices:
+                    display.draw_pixels(off_surf, vertex_pixels, (0, 255, 0))
+                scaled = pygame.transform.smoothscale(off_surf, (WIDTH, HEIGHT))
+                screen.blit(scaled, (0, 0))
+
                 object_rects = display.render_object_list_with_highlight(
                     screen, objects, top_left=OBJ_LIST_TOPLEFT, width=OBJ_LIST_WIDTH,
                     font_size=OBJ_FONT_SIZE, selected_index=(objects.index(current_obj_name))
@@ -270,34 +320,54 @@ def main():
                     cam = camera.load_camera(camfile)
                     v_cent_cam = vec_sub(tuple(cam['C']), centroid)
                     r, az, el = spherical_from_cartesian(v_cent_cam)
+
                 elif ev.key == pygame.K_o:
                     show_outline = not show_outline
                     print("Outline:", show_outline)
+
                 elif ev.key == pygame.K_v:
                     show_vertices = not show_vertices
                     print("Vértices:", show_vertices)
+
                 elif ev.key == pygame.K_z:
                     cam['d'] = float(cam.get('d', 1.0)) * 1.25
+
                 elif ev.key == pygame.K_x:
                     cam['d'] = float(cam.get('d', 1.0)) / 1.25
-                elif ev.key == pygame.K_l: # O reload pra iluminação - letra L
+
+                elif ev.key == pygame.K_l:
+                    # recarregar lighting.txt
                     light = lighting.load_lighting(lightfile)
                     lighting.pretty_print_lighting(light)
+
+                elif ev.key == pygame.K_1:
+                    # alternar escala de render (1,2,4)
+                    render_scale_index = (render_scale_index + 1) % len(RENDER_SCALES)
+                    print("Render scale:", RENDER_SCALES[render_scale_index])
+
                 elif ev.key == pygame.K_p:
                     fname = f"screenshot_{int(time.time())}.png"
-                    import pygame
                     pygame.image.save(screen, fname)
                     print(f"💾 Screenshot salvo: {fname}")
 
-                # redesenha sempre após qualquer tecla
-                all_pixels, proj_results, tri_pixels_map,framebuffer = build_frame(verts, tris, cam, WIDTH, HEIGHT, light)
-                outline_pixels, vertex_pixels = make_outline_and_vertices(tris, proj_results, WIDTH, HEIGHT)
-                display.clear_screen(screen, (0, 0, 0))
-                display.draw_colored_pixels(screen, framebuffer)
+                # redesenha sempre após qualquer tecla: usar current scale
+                scale = RENDER_SCALES[render_scale_index]
+                small_w = max(1, WIDTH // scale)
+                small_h = max(1, HEIGHT // scale)
+
+                all_pixels, proj_results, tri_pixels_map, framebuffer, basis = build_frame(verts, tris, cam, small_w, small_h, light)
+                outline_pixels, vertex_pixels = make_outline_and_vertices(tris, proj_results, small_w, small_h)
+
+                off_surf = pygame.Surface((small_w, small_h))
+                display.clear_screen(off_surf, (0, 0, 0))
+                display.draw_colored_pixels(off_surf, framebuffer)
                 if show_outline:
-                    display.draw_pixels(screen, outline_pixels, (255, 0, 0))
+                    display.draw_pixels(off_surf, outline_pixels, (255, 0, 0))
                 if show_vertices:
-                    display.draw_pixels(screen, vertex_pixels, (0, 255, 0))
+                    display.draw_pixels(off_surf, vertex_pixels, (0, 255, 0))
+                scaled = pygame.transform.smoothscale(off_surf, (WIDTH, HEIGHT))
+                screen.blit(scaled, (0, 0))
+
                 object_rects = display.render_object_list_with_highlight(
                     screen, objects, top_left=OBJ_LIST_TOPLEFT, width=OBJ_LIST_WIDTH,
                     font_size=OBJ_FONT_SIZE, selected_index=(objects.index(current_obj_name))
