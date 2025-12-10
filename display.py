@@ -1,6 +1,7 @@
 # display.py (atualizado: inclui render_help e mantém funções anteriores)
 import pygame
-from typing import Set, Tuple, List
+from typing import Set, Tuple, List, Dict
+
 
 Pixel = Tuple[int,int]
 Color = Tuple[int,int,int]

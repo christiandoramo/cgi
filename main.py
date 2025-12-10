@@ -170,7 +170,7 @@ def main():
     show_vertices = False
 
     # construir e desenhar frame
-    all_pixels, proj_results, tri_pixels_map, framebuffer = build_frame(verts, tris, cam, WIDTH, HEIGHT)
+    all_pixels, proj_results, tri_pixels_map, framebuffer = build_frame(verts, tris, cam, WIDTH, HEIGHT, light)
     outline_pixels, vertex_pixels = make_outline_and_vertices(tris, proj_results, WIDTH, HEIGHT)
     display.clear_screen(screen, (0, 0, 0))
     display.draw_colored_pixels(screen, framebuffer)
@@ -219,7 +219,7 @@ def main():
                             centroid = compute_centroid(verts)
                             v_cent_cam = vec_sub(tuple(cam['C']), centroid)
                             r, az, el = spherical_from_cartesian(v_cent_cam)
-                            all_pixels, proj_results, tri_pixels_map, framebuffer  = build_frame(verts, tris, cam, WIDTH, HEIGHT)
+                            all_pixels, proj_results, tri_pixels_map, framebuffer  = build_frame(verts, tris, cam, WIDTH, HEIGHT,light)
                             outline_pixels, vertex_pixels = make_outline_and_vertices(tris, proj_results, WIDTH, HEIGHT)
                             display.clear_screen(screen, (0, 0, 0))
                             display.draw_colored_pixels(screen, framebuffer)
@@ -252,7 +252,7 @@ def main():
                 cam['N'] = vec_sub(centroid, Cnew)
                 if 'V' not in cam:
                     cam['V'] = (0, 1, 0)
-                all_pixels, proj_results, tri_pixels_map,framebuffer = build_frame(verts, tris, cam, WIDTH, HEIGHT)
+                all_pixels, proj_results, tri_pixels_map,framebuffer = build_frame(verts, tris, cam, WIDTH, HEIGHT, light)
                 outline_pixels, vertex_pixels = make_outline_and_vertices(tris, proj_results, WIDTH, HEIGHT)
                 display.clear_screen(screen, (0, 0, 0))
                 display.draw_colored_pixels(screen, framebuffer)
@@ -290,7 +290,7 @@ def main():
                     print(f"💾 Screenshot salvo: {fname}")
 
                 # redesenha sempre após qualquer tecla
-                all_pixels, proj_results, tri_pixels_map,framebuffer = build_frame(verts, tris, cam, WIDTH, HEIGHT)
+                all_pixels, proj_results, tri_pixels_map,framebuffer = build_frame(verts, tris, cam, WIDTH, HEIGHT, light)
                 outline_pixels, vertex_pixels = make_outline_and_vertices(tris, proj_results, WIDTH, HEIGHT)
                 display.clear_screen(screen, (0, 0, 0))
                 display.draw_colored_pixels(screen, framebuffer)
