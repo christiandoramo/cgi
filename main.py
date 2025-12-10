@@ -1,10 +1,11 @@
-# main.py (inicia automaticamente, sem precisar digitar nome)
+# main.py
 import os
 import sys
 import time
 import glob
 import math
 
+import lighting
 import byu_loader
 import camera
 import transform
@@ -83,12 +84,14 @@ def spherical_from_cartesian(v):
     return (r, az, el)
 
 
-def build_frame(verts, tris, cam, width, height):
+def build_frame(verts, tris, cam, width, height, lighting):
     basis = transform.compute_camera_basis(cam)
     view_coords = transform.world_to_view_vertices(verts, basis)
     proj_results = projection.world_view_to_screen_list(view_coords, cam, width, height)
-    tri_pixels_map = rasterizer.rasterize_mesh(tris, proj_results, width, height)
-    all_pixels = set()
+    # mudei aqui
+    tri_pixels_map, framebuffer = rasterizer.rasterize_mesh(tris, proj_results, width, height,
+                                                            vertices_world=verts, basis=basis, lighting=lighting)
+    all_pixels = set(framebuffer.keys())
     for pset in tri_pixels_map.values():
         all_pixels.update(pset)
     print("\n== Debug pipeline (resumo) ==")
@@ -100,7 +103,8 @@ def build_frame(verts, tris, cam, width, height):
     else:
         print("Nenhum pixel preenchido (fora do frustum?).")
     print("================================\n")
-    return all_pixels, proj_results, tri_pixels_map
+    return all_pixels, proj_results, tri_pixels_map, framebuffer
+
 
 
 def make_outline_and_vertices(tris, proj_results, width, height):
@@ -128,29 +132,34 @@ def make_outline_and_vertices(tris, proj_results, width, height):
 
 
 def main():
-    # 1️⃣ buscar objetos
+    # buscar objetos
     objects = find_formas_objects("formas")
     if not objects:
         print("⚠️ Nenhum arquivo .byu encontrado na pasta 'formas/'.")
         print("Crie pelo menos um arquivo e reinicie o programa.")
         sys.exit(1)
 
-    # 2️⃣ carregar o primeiro objeto
+    # carregar o primeiro objeto
     current_obj_name = objects[0]
     print(f"Carregando objeto inicial: {current_obj_name}")
     verts, tris = load_mesh_for_name(current_obj_name)
     centroid = compute_centroid(verts)
 
-    # 3️⃣ carregar câmera
+    # carregar câmera
     camfile = "camera.txt"
     cam = camera.load_camera(camfile)
     camera.pretty_print_camera(cam)
+    
+    # carregar iluminação
+    lightfile = "lighting.txt"
+    light = lighting.load_lighting(lightfile)
+    lighting.pretty_print_lighting(light)
 
     # converter posição atual para esférico
     v_cent_cam = vec_sub(tuple(cam['C']), centroid)
     r, az, el = spherical_from_cartesian(v_cent_cam)
 
-    # 4️⃣ inicializar janela
+    # inicializar janela
     try:
         screen = display.init_window(WIDTH, HEIGHT)
     except Exception as e:
@@ -160,11 +169,11 @@ def main():
     show_outline = False
     show_vertices = False
 
-    # 5️⃣ construir e desenhar frame
-    all_pixels, proj_results, tri_pixels_map = build_frame(verts, tris, cam, WIDTH, HEIGHT)
+    # construir e desenhar frame
+    all_pixels, proj_results, tri_pixels_map, framebuffer = build_frame(verts, tris, cam, WIDTH, HEIGHT)
     outline_pixels, vertex_pixels = make_outline_and_vertices(tris, proj_results, WIDTH, HEIGHT)
     display.clear_screen(screen, (0, 0, 0))
-    display.draw_pixels(screen, all_pixels, (255, 255, 255))
+    display.draw_colored_pixels(screen, framebuffer)
     object_rects = display.render_object_list_with_highlight(
         screen, objects, top_left=OBJ_LIST_TOPLEFT, width=OBJ_LIST_WIDTH,
         font_size=OBJ_FONT_SIZE, selected_index=0
@@ -172,6 +181,7 @@ def main():
 
     help_lines = [
         "Comandos:",
+        "L - recarregar lighting.txt",
         "R - recarregar camera.txt",
         "O - toggle contorno",
         "V - toggle vértices",
@@ -192,7 +202,7 @@ def main():
 
     print("✅ Sistema iniciado. Use o mouse e teclas conforme instruções na tela.")
 
-    # 6️⃣ loop principal
+    # Meu loop principal
     while running:
         for ev in pygame.event.get():
             if ev.type == pygame.QUIT:
@@ -209,10 +219,10 @@ def main():
                             centroid = compute_centroid(verts)
                             v_cent_cam = vec_sub(tuple(cam['C']), centroid)
                             r, az, el = spherical_from_cartesian(v_cent_cam)
-                            all_pixels, proj_results, tri_pixels_map = build_frame(verts, tris, cam, WIDTH, HEIGHT)
+                            all_pixels, proj_results, tri_pixels_map, framebuffer  = build_frame(verts, tris, cam, WIDTH, HEIGHT)
                             outline_pixels, vertex_pixels = make_outline_and_vertices(tris, proj_results, WIDTH, HEIGHT)
                             display.clear_screen(screen, (0, 0, 0))
-                            display.draw_pixels(screen, all_pixels, (255, 255, 255))
+                            display.draw_colored_pixels(screen, framebuffer)
                             object_rects = display.render_object_list_with_highlight(
                                 screen, objects, top_left=OBJ_LIST_TOPLEFT, width=OBJ_LIST_WIDTH,
                                 font_size=OBJ_FONT_SIZE, selected_index=(objects.index(current_obj_name))
@@ -242,10 +252,10 @@ def main():
                 cam['N'] = vec_sub(centroid, Cnew)
                 if 'V' not in cam:
                     cam['V'] = (0, 1, 0)
-                all_pixels, proj_results, tri_pixels_map = build_frame(verts, tris, cam, WIDTH, HEIGHT)
+                all_pixels, proj_results, tri_pixels_map,framebuffer = build_frame(verts, tris, cam, WIDTH, HEIGHT)
                 outline_pixels, vertex_pixels = make_outline_and_vertices(tris, proj_results, WIDTH, HEIGHT)
                 display.clear_screen(screen, (0, 0, 0))
-                display.draw_pixels(screen, all_pixels, (255, 255, 255))
+                display.draw_colored_pixels(screen, framebuffer)
                 object_rects = display.render_object_list_with_highlight(
                     screen, objects, top_left=OBJ_LIST_TOPLEFT, width=OBJ_LIST_WIDTH,
                     font_size=OBJ_FONT_SIZE, selected_index=(objects.index(current_obj_name))
@@ -270,6 +280,9 @@ def main():
                     cam['d'] = float(cam.get('d', 1.0)) * 1.25
                 elif ev.key == pygame.K_x:
                     cam['d'] = float(cam.get('d', 1.0)) / 1.25
+                elif ev.key == pygame.K_l: # O reload pra iluminação - letra L
+                    light = lighting.load_lighting(lightfile)
+                    lighting.pretty_print_lighting(light)
                 elif ev.key == pygame.K_p:
                     fname = f"screenshot_{int(time.time())}.png"
                     import pygame
@@ -277,10 +290,10 @@ def main():
                     print(f"💾 Screenshot salvo: {fname}")
 
                 # redesenha sempre após qualquer tecla
-                all_pixels, proj_results, tri_pixels_map = build_frame(verts, tris, cam, WIDTH, HEIGHT)
+                all_pixels, proj_results, tri_pixels_map,framebuffer = build_frame(verts, tris, cam, WIDTH, HEIGHT)
                 outline_pixels, vertex_pixels = make_outline_and_vertices(tris, proj_results, WIDTH, HEIGHT)
                 display.clear_screen(screen, (0, 0, 0))
-                display.draw_pixels(screen, all_pixels, (255, 255, 255))
+                display.draw_colored_pixels(screen, framebuffer)
                 if show_outline:
                     display.draw_pixels(screen, outline_pixels, (255, 0, 0))
                 if show_vertices:

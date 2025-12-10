@@ -99,6 +99,19 @@ def compute_camera_basis(camera: Camera) -> Dict[str, Vec3]:
 
     return {"C": C, "u": u, "v": v_final, "n": n}
 
+# 2VA - vetor para facilitar 
+def world_to_view_vector(V: Vec3, basis: Dict[str, Vec3]) -> Vec3:
+    """
+    Transforma um vetor (direção / normal) do espaço mundo para coordenadas de vista
+    usando apenas a parte rotacional da base (u,v,n).
+    Não aplica translação (vetor de direção).
+    """
+    u = basis["u"]
+    v = basis["v"]
+    n = basis["n"]
+    return (dot(V, u), dot(V, v), dot(V, n))
+
+
 def world_to_view_point(P: Vec3, basis: Dict[str, Vec3]) -> Vec3:
     """
     Transforma ponto P (mundo) para coordenadas de vista:

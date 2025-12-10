@@ -113,3 +113,18 @@ def render_help(surface: pygame.Surface, lines: List[str],
         ty = y0 + padding + i * (line_height + 2)
         txt_surf = font.render(line, True, text_color)
         surface.blit(txt_surf, (x0 + padding, ty))
+
+def draw_colored_pixels(surface: 'pygame.Surface', pixel_color_map: Dict[Pixel, Color]):
+    """
+    Desenha pixels com cor individual. pixel_color_map: {(x,y):(r,g,b), ...}
+    """
+    if not pixel_color_map:
+        return
+    surface.lock()
+    try:
+        w, h = surface.get_size()
+        for (x, y), color in pixel_color_map.items():
+            if 0 <= x < w and 0 <= y < h:
+                surface.set_at((x, y), color)
+    finally:
+        surface.unlock()
