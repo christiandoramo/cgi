@@ -5,14 +5,14 @@ import os
 Vec3 = Tuple[float, float, float]
 
 DEFAULT_LIGHTING = {
-    "Iamb": (100.0, 100.0, 100.0),   # luz ambiente (RGB)
-    "Ka": 0.2,                       # coef ambiente escalar
-    "Il": (127.0, 213.0, 254.0),     # cor da luz (RGB)
-    "Pl": (60.0, 5.0, -10.0),        # posição da luz (world)
-    "Kd": (0.5, 0.5, 0.5),           # coef difuso (RGB) - por segurança assumir escalar replicado
-    "Od": (0.7, 0.7, 0.7),           # cor do objeto (albedo, 0..1)
-    "Ks": 0.5,                       # coef especular escalar
-    "eta": 1.0                       # expoente especular
+    "Iamb": (100.0, 100.0, 100.0),
+    "Ka": 0.2,
+    "Il": (127.0, 213.0, 254.0),
+    "Pl": (60.0, 5.0, -10.0),
+    "Kd": (0.5, 0.5, 0.5),
+    "Od": (0.7, 0.7, 0.7),
+    "Ks": 0.5,
+    "eta": 1.0
 }
 
 def parse_floats_from_str(s: str):
@@ -56,7 +56,6 @@ def load_lighting(path: str = "lighting.txt") -> Dict[str, object]:
                     light["Ks"] = float(vals[0])
                 elif key in ("eta", "êta") and len(vals) >= 1:
                     light["eta"] = float(vals[0])
-                # ignora chaves desconhecidas
     light["_from_file"] = True
     return light
 

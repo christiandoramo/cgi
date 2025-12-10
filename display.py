@@ -1,7 +1,7 @@
-# display.py (atualizado: inclui render_help e mantém funções anteriores)
+# display.py
 import pygame
 from typing import Set, Tuple, List, Dict
-
+import numpy as np
 
 Pixel = Tuple[int,int]
 Color = Tuple[int,int,int]
@@ -28,6 +28,38 @@ def draw_pixels(surface: pygame.Surface, pixels: Set[Pixel], color: Color = (255
                 surface.set_at((x,y), color)
     finally:
         surface.unlock()
+
+def draw_colored_pixels(surface: pygame.Surface, pixel_map: Dict[Pixel, Color]):
+    """
+    Mantido para compatibilidade: desenha um dicionário de pixels (pode ser lento).
+    Preferir usar blit_numpy_array para performance.
+    """
+    if not pixel_map:
+        return
+    surface.lock()
+    try:
+        w, h = surface.get_size()
+        for (x,y), color in pixel_map.items():
+            if 0 <= x < w and 0 <= y < h:
+                surface.set_at((x,y), color)
+    finally:
+        surface.unlock()
+
+def blit_numpy_array(surface: pygame.Surface, arr: np.ndarray):
+    """
+    Coloca um np.uint8 array HxWx3 na surface.
+    arr shape expected: (height, width, 3)
+    Usamos pygame.surfarray.make_surface, que espera (width,height,3) axis order,
+    então fazemos transpose.
+    """
+    if arr is None or arr.size == 0:
+        return
+    # arr must be uint8
+    if arr.dtype != np.uint8:
+        arr = np.clip(arr, 0, 255).astype(np.uint8)
+    # transpose to (width, height, 3)
+    surf = pygame.surfarray.make_surface(np.transpose(arr, (1,0,2)))
+    surface.blit(surf, (0,0))
 
 def present():
     pygame.display.flip()
@@ -85,10 +117,6 @@ def render_help(surface: pygame.Surface, lines: List[str],
                 bg_color: Tuple[int,int,int] = (10,10,10),
                 text_color: Tuple[int,int,int] = (230,230,230),
                 padding: int = 6):
-    """
-    Desenha uma caixa de ajuda com as linhas fornecidas.
-    Se top_left for None, posiciona no canto inferior esquerdo.
-    """
     font = pygame.font.SysFont(font_name, font_size)
     line_height = font.get_linesize()
     n = len(lines)
@@ -103,29 +131,11 @@ def render_help(surface: pygame.Surface, lines: List[str],
         x0, y0 = top_left
 
     bg_surf = pygame.Surface((surf_w, surf_h), flags=pygame.SRCALPHA)
-    # fundo semi-transparente
     bg_surf.fill((*bg_color, 200))
-    # borda
     pygame.draw.rect(bg_surf, (80,80,80), bg_surf.get_rect(), 1)
     surface.blit(bg_surf, (x0, y0))
 
-    # desenhar linhas
     for i, line in enumerate(lines):
         ty = y0 + padding + i * (line_height + 2)
         txt_surf = font.render(line, True, text_color)
         surface.blit(txt_surf, (x0 + padding, ty))
-
-def draw_colored_pixels(surface: 'pygame.Surface', pixel_color_map: Dict[Pixel, Color]):
-    """
-    Desenha pixels com cor individual. pixel_color_map: {(x,y):(r,g,b), ...}
-    """
-    if not pixel_color_map:
-        return
-    surface.lock()
-    try:
-        w, h = surface.get_size()
-        for (x, y), color in pixel_color_map.items():
-            if 0 <= x < w and 0 <= y < h:
-                surface.set_at((x, y), color)
-    finally:
-        surface.unlock()
